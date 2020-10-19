@@ -23,6 +23,8 @@ headers = {
     "Referer": "https://www.91160.com",
     "Origin": "https://www.91160.com"
 }
+department_index = '768'
+my_doctr = ''
 session = requests.Session()
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 
@@ -197,40 +199,43 @@ def brush_ticket(unit_id, dep_id, weeks, days) -> list:
                     for index in week_arr:
                         if index in sch:
                             result.append(sch[index])
-    return [element for element in result if element["y_state"] == "1"]
+        [element for element in result if element["y_state"] == "1"]
 
 
-def brush_ticket_new(doc_id, dep_id, weeks, days) -> list:
-    now_date = datetime.date.today().strftime("%Y-%m-%d")
-    url = "https://www.91160.com/doctors/ajaxgetclass.html"
-    data = {
-        "docid": doc_id,
-        "date": now_date,
-        "days": 6
-    }
-    r = session.post(url, headers=headers, data=data)
-    json_obj = r.json()
-
-    if "dates" not in json_obj:
-        raise RuntimeError("刷票异常: {}".format(json_obj))
-
-    date_list: dict = json_obj["dates"]
-    week_arr = []
-    for week in weeks:
-        val = convert_week(week)
-        key = list(date_list.keys())[list(date_list.values()).index(val)]
-        week_arr.append(key)
-    if len(week_arr) == 0:
-        raise RuntimeError("刷票异常: {}".format(json_obj))
-
-    doc_sch = json_obj["sch"]["{}_{}".format(dep_id, doc_id)]
+def brush_ticket_new(doc_ids, dep_id, weeks, days) -> list:
     result = []
-    for day in days:
-        key = "{}_{}_{}".format(dep_id, doc_id, day)
-        if key in doc_sch:
-            doc_sch_day = doc_sch[key]
-            for week in week_arr:
-                result.append(doc_sch_day[week])
+    for doc_id in doc_ids:
+        now_date = datetime.date.today().strftime("%Y-%m-%d")
+        url = "https://www.91160.com/doctors/ajaxgetclass.html"
+        data = {
+            "docid": doc_id,
+            "date": now_date,
+            "days": 6
+        }
+        r = session.post(url, headers=headers, data=data)
+        json_obj = r.json()
+
+        if "dates" not in json_obj:
+            raise RuntimeError("刷票异常: {}".format(json_obj))
+
+        date_list: dict = json_obj["dates"]
+        week_arr = []
+        for week in weeks:
+            val = convert_week(week)
+            key = list(date_list.keys())[list(date_list.values()).index(val)]
+            week_arr.append(key)
+        if len(week_arr) == 0:
+            raise RuntimeError("刷票异常: {}".format(json_obj))
+
+        doc_sch = json_obj["sch"]["{}_{}".format(dep_id, doc_id)]
+        for day in days:
+            key = "{}_{}_{}".format(dep_id, doc_id, day)
+            if key in doc_sch:
+                doc_sch_day = doc_sch[key]
+                for week in week_arr:
+                    if week in doc_sch_day:
+                        result.append(doc_sch_day[week])
+
     return [element for element in result if element["y_state"] == "1"]
 
 
@@ -267,13 +272,18 @@ def get_ticket(ticket, unit_id, dep_id):
     logging.info(data)
     url = "https://www.91160.com/guahao/ysubmit.html"
     r = session.post(url, data=data, headers=headers, allow_redirects=False)
+    #r.status_code = 304
+    result = False
     if r.status_code == 302:
         # redirect_url = r.headers["location"]
         # if get_ticket_result(redirect_url):
         logging.info("预约成功，请留意短信通知！")
+        result = True
     else:
         logging.info(r.text)
         logging.info("预约失败")
+        result = False
+        return result
 
 
 def get_ticket_result(redirect_url) -> bool:
@@ -286,8 +296,8 @@ def get_ticket_result(redirect_url) -> bool:
 
 def init_data():
     while True:
-        username = input("请输入用户名: ")
-        password = input("请输入密码: ")
+        username = "18679614457"
+        password = "aa08234"
         print("登录中，请稍等...")
         if login(username, password):
             result = {"username": username, "password": password}
@@ -301,7 +311,7 @@ def init_data():
         print("{}{}. {}".format(" " if index < 9 else "", index + 1, city["name"]))
     print()
     while True:
-        city_index = input("请输入城市序号: ")
+        city_index = "9"
         is_number = True if re.match(r'^\d+$', city_index) else False
         if is_number and int(city_index) in range(1, len(cities) + 1):
             break
@@ -320,7 +330,7 @@ def init_data():
         print("{}{}. {}".format(" " if index < 9 else "", index + 1, hospital["unit_name"]))
     print()
     while True:
-        hospital_index = input("请输入医院序号: ")
+        hospital_index = "9"
         is_number = True if re.match(r'^\d+$', hospital_index) else False
         if is_number and int(hospital_index) in range(1, len(hospitals) + 1):
             result["unit_id"] = hospitals[int(hospital_index) - 1]["unit_id"]
@@ -344,7 +354,7 @@ def init_data():
             print("    {}. {}".format(child["dep_id"], child["dep_name"]))
     print()
     while True:
-        department_index = input("请输入科室序号: ")
+        # department_index = input("请输入科室序号: ")
         is_number = True if re.match(r'^\d+$', department_index) else False
         if is_number and int(department_index) in dep_id_arr:
             result["dep_id"] = department_index
@@ -365,14 +375,18 @@ def init_data():
         doc_id_arr.append(doctor["doctor_id"])
         print("{}. {}".format(doctor["doctor_id"], doctor["doctor_name"]))
     print()
+    result["doc_ids"] = doc_id_arr
+
+    """ 
     while True:
-        doctor_index = input("请输入医生编号: ")
+        doctor_index = my_doctr
         is_number = True if re.match(r'^\d+$', doctor_index) else False
         if is_number and int(doctor_index) in doc_id_arr:
             result["doc_id"] = doctor_index
             break
         else:
-            print("输入有误，请重新输入！")
+           print("输入有误，请重新输入！")
+           """
 
     print("=====请选择哪天的号=====")
     print()
@@ -380,7 +394,7 @@ def init_data():
         print("{}. {}".format(week["value"], week["name"]))
     print()
     while True:
-        week_str = input("请输入需要周几的号[可多选，如(6,7)](默认不限制): ")
+        week_str = '1,2,3,4,5,6,7'
         week_str = week_str if len(week_str) > 0 else ",".join(map(lambda x: str(x), list(range(1, 8))))
         result["weeks"] = week_str.split(",")
         break
@@ -391,7 +405,7 @@ def init_data():
         print("{}. {}".format(index + 1, day["name"]))
     print()
     while True:
-        day_index = input("请输入时间段序号: ")
+        day_index = '3'
         is_number = True if re.match(r'^\d+$', day_index) else False
         if is_number and int(day_index) in range(1, len(day_list) + 1):
             result["days"] = day_list[int(day_index) - 1]["value"]
@@ -407,30 +421,33 @@ def run():
     logging.info(result)
     unit_id = result["unit_id"]
     dep_id = result["dep_id"]
-    doc_id = result["doc_id"]
+    doc_ids = result["doc_ids"]
     weeks = result["weeks"]
     days = result["days"]
     # 刷票休眠时间，频率过高会导致刷票接口拒绝请求
-    sleep_time = 10
+    sleep_time = 20
 
     logging.info("刷票开始")
-    logging.info("https://www.91160.com/doctors/index/docid-{}.html".format(doc_id))
+    logging.info("https://www.91160.com/doctors/index/docid-{}.html".format(doc_ids))
     while True:
         try:
             # tickets = brush_ticket(unit_id, dep_id, weeks, days)
-            tickets = brush_ticket_new(doc_id, dep_id, weeks, days)
+            tickets = brush_ticket_new(doc_ids, dep_id, weeks, days)
         except Exception as e:
             logging.error(e)
             break
         if len(tickets) > 0:
             logging.info(tickets)
-            logging.info("刷到票了，开抢了...")
-            get_ticket(tickets[0], unit_id, dep_id)
-            break
-        else:
-            logging.info("努力刷票中...")
-        time.sleep(sleep_time)
-    logging.info("刷票结束")
+            logging.info("刷到票了，预定啦...")
+            for tick in tickets:
+                result = get_ticket(tickets[tick], unit_id, dep_id)
+            if result:
+                break
+            else:
+                logging.info("努力刷票中...")
+                time.sleep(sleep_time)
+
+        logging.info("刷票结束")
 
 
 if __name__ == '__main__':
